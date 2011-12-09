@@ -12,7 +12,6 @@ except Exception, e:
 from django import forms
 from django.db.models.sql.expressions import SQLEvaluator
 from django.db.models.fields import Field, BigIntegerField
-from django.db.models.fields.subclassing import Creator, SubfieldBase
 from django.db.models.fields.subclassing import Creator, LegacyConnection
 
 from django.utils.encoding import smart_unicode
@@ -151,6 +150,9 @@ class BitHandler(object):
 
     def __nonzero__(self):
         return bool(self._value)
+
+    def __len__(self):
+        return len(self._keys)
 
     def __and__(self, value):
         return BitHandler(self._value & int(value), self._keys)
