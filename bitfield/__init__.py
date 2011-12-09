@@ -13,6 +13,13 @@ from django import forms
 from django.db.models.sql.expressions import SQLEvaluator
 from django.db.models.fields import Field, BigIntegerField
 from django.db.models.fields.subclassing import Creator, SubfieldBase
+from django.db.models.fields.subclassing import Creator, LegacyConnection
+
+from django.utils.encoding import smart_unicode
+from django.utils.text import capfirst
+
+from django.core.exceptions import ValidationError
+from django.core import validators
 
 class Bit(object):
     """
@@ -214,26 +221,69 @@ class BitHandler(object):
 
     def keys(self):
         return self._keys
-
+    
     def iterkeys(self):
         return iter(self._keys)
-
+        
     def items(self):
         return list(self.iteritems())
 
     def iteritems(self):
         for k in self._keys:
             yield (k, getattr(self, k).is_set)
+    
 
-class BitFormField(forms.IntegerField):
-    def __init__(self, *args, **kwargs):
-        super(BitFormField, self).__init__(*args, **kwargs)
+class BitFormWidget(forms.CheckboxSelectMultiple):
+    def render(self, name, value, attrs=None, choices=()):
+        
+        if isinstance(value, (long, int)):
+            value = [value]
+        elif isinstance(value, BitHandler):
+            value = [pos for (pos, bit) in enumerate(value.iteritems()) if bit[1]]
+        
+        return super(BitFormWidget, self).render(name, value, attrs, choices)
+
+class BitFormField(forms.MultipleChoiceField):
+    hidden_widget = forms.MultipleHiddenInput
+    widget = BitFormWidget
+    
+    def __init__(self, choices=(), required=True, widget=None, label=None,
+                 initial=None, help_text=None, *args, **kwargs):
+
+        super(BitFormField, self).__init__(choices=choices, required=required, widget=widget, label=label,
+                                        initial=initial, help_text=help_text, *args, **kwargs)
 
     def clean(self, value):
-        if not value:
-            value = 0
-        value = int(value)
+        if isinstance(value, list):
+            value = [int(x) for x in value]
+        else:
+            value = []
         return super(BitFormField, self).clean(value)
+    
+    def to_python(self, value):
+        if isinstance(value, (int, long)):
+            new_value = []
+            for x in xrange(0, 63):
+                z = 1<<x
+                if value < z:
+                    break
+                
+                if (value & z):
+                    new_value.append(smart_unicode(x))
+            value = new_value
+        else:
+            return super(BitFormField, self).to_python(value)
+        
+        return value
+
+    def validate(self, value):
+        if isinstance(value, BitHandler):
+            for k, f in value.iteritems():
+                if f:
+                    return
+            raise ValidationError(self.error_messages['required'])
+        else:
+            super(BitFormField, self).validate(value)
 
 class BitFieldFlags(object):
     def __init__(self, flags):
@@ -329,7 +379,7 @@ class BitQuerySaveWrapper(BitQueryLookupWrapper):
         return ("%s.%s %s %d" % (qn(self.table_alias), qn(self.column), XOR_OPERATOR, self.bit.mask),
                 [])
 
-class BitFieldMeta(SubfieldBase):
+class BitFieldMeta(LegacyConnection):
     """
     Modified SubFieldBase to use our contribute_to_class method (instead of
     monkey-patching make_contrib).  This uses our BitFieldCreator descriptor
@@ -351,8 +401,10 @@ class BitField(BigIntegerField):
     __metaclass__ = BitFieldMeta
 
     def __init__(self, flags, *args, **kwargs):
+        kwargs['choices']= enumerate(x[1] for x in flags)
+
         BigIntegerField.__init__(self, *args, **kwargs)
-        self.flags = flags
+        self.flags = [x[0] for x in flags]       
 
     def south_field_triple(self):
         "Returns a suitable description of this field for South."
@@ -362,14 +414,40 @@ class BitField(BigIntegerField):
         return (field_class, args, kwargs)
 
     def formfield(self, form_class=BitFormField, **kwargs):
-        return Field.formfield(self, form_class, **kwargs)
+        
+        defaults = {'required': not self.blank, 'label': capfirst(self.verbose_name), 'help_text': self.help_text}
+        if self.has_default():
+            if callable(self.default):
+                defaults['initial'] = self.default
+                defaults['show_hidden_initial'] = True
+            else:
+                defaults['initial'] = self.get_default()
+        if self.choices:
+            # Fields with choices get special treatment.
+            include_blank = self.blank or not (self.has_default() or 'initial' in kwargs)
+            defaults['choices'] = self.get_choices(include_blank=include_blank)
+            #defaults['coerce'] = self.to_python
+            if self.null:
+                defaults['empty_value'] = None
+            #form_class = forms.TypedChoiceField
+            # Many of the subclass-specific formfield arguments (min_value,
+            # max_value) don't apply for choice fields, so be sure to only pass
+            # the values that TypedChoiceField will understand.
+            for k in kwargs.keys():
+                if k not in ('coerce', 'empty_value', 'choices', 'required',
+                             'widget', 'label', 'initial', 'help_text',
+                             'error_messages', 'show_hidden_initial'):
+                    del kwargs[k]
+        defaults.update(kwargs)
+        
+        return BitFormField(**defaults)
 
     def pre_save(self, instance, add):
         value = getattr(instance, self.attname)
         return value
 
     def get_prep_value(self, value):
-        if isinstance(value, (BitHandler, Bit)):
+        if isinstance(value, Bit):
             value = value.mask
         return int(value)
 
@@ -381,7 +459,7 @@ class BitField(BigIntegerField):
     def get_db_prep_lookup(self, lookup_type, value, connection, prepared=False):
         if isinstance(value, SQLEvaluator) and isinstance(value.expression, Bit):
             value = value.expression
-        if isinstance(value, (BitHandler, Bit)):
+        if isinstance(value, Bit):
             return BitQueryLookupWrapper(self.model._meta.db_table, self.name, value)
         return BigIntegerField.get_db_prep_lookup(self, lookup_type=lookup_type, value=value,
                                                         connection=connection, prepared=prepared)
@@ -407,9 +485,28 @@ class BitField(BigIntegerField):
                 for bit_number, _ in enumerate(self.flags):
                     new_value |= (value & (2**bit_number))
                 value = new_value
-
+            
+            if isinstance(value, list):
+                new_value = 0
+                for bit in value:
+                    try:
+                        new_value = new_value + (2**int(bit))
+                    except Exception:
+                            pass
+                value = new_value 
+            
             value = BitHandler(value, self.flags)
         else:
             # Ensure flags are consistent for unpickling
             value._keys = self.flags
         return value
+    
+    def validate(self, value, model_instance):
+        if isinstance(value, BitHandler):
+            return 
+                    
+        if value is None and not self.null:
+            raise ValidationError(self.error_messages['null'])
+
+        if not self.blank and value in validators.EMPTY_VALUES:
+            raise ValidationError(self.error_messages['blank'])
