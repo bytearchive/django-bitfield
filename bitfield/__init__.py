@@ -9,16 +9,29 @@ try:
 except Exception, e:
     VERSION = 'unknown'
 
+import django
 from django import forms
 from django.db.models.sql.expressions import SQLEvaluator
-from django.db.models.fields import Field, BigIntegerField
-from django.db.models.fields.subclassing import Creator, LegacyConnection
+
+if django.VERSION[1] > 1:
+    from django.db.models.fields import Field, BigIntegerField
+else:
+    from django.db.models.fields import Field
+    from .fields import BigIntegerField
+
+if django.VERSION[1] >= 4:
+    from django.db.models.fields.subclassing import Creator, SubfieldBase
+else:
+    from django.db.models.fields.subclassing import Creator
+    from .fields import SubfieldBase
 
 from django.utils.encoding import smart_unicode
 from django.utils.text import capfirst
-
 from django.core.exceptions import ValidationError
-from django.core import validators
+try:
+    from django.core.validators import EMPTY_VALUES
+except ImportError:
+    EMPTY_VALUES = (None, '', [], (), {})
 
 class Bit(object):
     """
@@ -381,7 +394,7 @@ class BitQuerySaveWrapper(BitQueryLookupWrapper):
         return ("%s.%s %s %d" % (qn(self.table_alias), qn(self.column), XOR_OPERATOR, self.bit.mask),
                 [])
 
-class BitFieldMeta(LegacyConnection):
+class BitFieldMeta(SubfieldBase):
     """
     Modified SubFieldBase to use our contribute_to_class method (instead of
     monkey-patching make_contrib).  This uses our BitFieldCreator descriptor
@@ -494,7 +507,7 @@ class BitField(BigIntegerField):
                     try:
                         new_value = new_value + (2**int(bit))
                     except Exception:
-                            pass
+                        pass
                 value = new_value 
             
             value = BitHandler(value, self.flags)
@@ -510,5 +523,5 @@ class BitField(BigIntegerField):
         if value is None and not self.null:
             raise ValidationError(self.error_messages['null'])
 
-        if not self.blank and value in validators.EMPTY_VALUES:
+        if not self.blank and value in EMPTY_VALUES:
             raise ValidationError(self.error_messages['blank'])
