@@ -8,7 +8,7 @@ else:
     from django.db.models.fields import Field
     from .fields import BigIntegerField
 
-if django.VERSION[1] >= 4:
+if django.VERSION[1] >= 3:
     from django.db.models.fields.subclassing import Creator, SubfieldBase
 else:
     from django.db.models.fields.subclassing import Creator
