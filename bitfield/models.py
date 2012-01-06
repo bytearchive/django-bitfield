@@ -108,6 +108,8 @@ class BitField(BigIntegerField):
         return (field_class, args, kwargs)
 
     def formfield(self, form_class=BitFormField, **kwargs):
+        if 'choices' not in kwargs:
+            kwargs['choices'] = self.flags
         return Field.formfield(self, form_class, **kwargs)
 
     def pre_save(self, instance, add):
