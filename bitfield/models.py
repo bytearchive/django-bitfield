@@ -5,6 +5,7 @@ from django.db.models.sql.expressions import SQLEvaluator
 if django.VERSION[1] > 1:
     from django.db.models.fields import Field, BigIntegerField
 else:
+    from django.db import connection as db_connection
     from django.db.models.fields import Field
     from .fields import BigIntegerField
 
@@ -126,11 +127,13 @@ class BitField(BigIntegerField):
     #         return BitQuerySaveWrapper(self.model._meta.db_table, self.name, value)
     #     return super(BitField, self).get_db_prep_save(value, connection=connection)
 
-    def get_db_prep_lookup(self, lookup_type, value, connection, prepared=False):
+    def get_db_prep_lookup(self, lookup_type, value, connection=None, prepared=False):
         if isinstance(value, SQLEvaluator) and isinstance(value.expression, Bit):
             value = value.expression
         if isinstance(value, (BitHandler, Bit)):
             return BitQueryLookupWrapper(self.model._meta.db_table, self.name, value)
+        if connection is None:
+            connection = db_connection
         return BigIntegerField.get_db_prep_lookup(self, lookup_type=lookup_type, value=value,
                                                         connection=connection, prepared=prepared)
 
