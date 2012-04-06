@@ -17,16 +17,13 @@ class mytest(test):
 
 setup(
     name='django-bitfield',
-    version='1.5.0a3',
+    version='1.5.0a5',
     author='DISQUS',
     author_email='opensource@disqus.com',
     url='http://github.com/disqus/django-bitfield',
     description = 'BitField in Django',
     packages=find_packages(),
     zip_safe=False,
-    install_requires=[
-        'django',
-    ],
     test_suite = 'bitfield.tests',
     include_package_data=True,
     cmdclass={"test": mytest},
