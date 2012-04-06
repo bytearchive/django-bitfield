@@ -37,6 +37,10 @@ class BigIntegerField(IntegerField):
                     'max_value': BigIntegerField.MAX_BIGINT}
         defaults.update(kwargs)
         return super(BigIntegerField, self).formfield(**defaults)
+    
+    def contribute_to_class(self, cls, name):
+        self.model = cls
+        super(BigIntegerField, self).contribute_to_class(cls, name)
 
 #
 # Copied from Django trunk (1.4) for backwards compatibility
