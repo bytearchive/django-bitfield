@@ -133,7 +133,7 @@ class BitField(BigIntegerField):
         if isinstance(value, (BitHandler, Bit)):
             return BitQueryLookupWrapper(self.model._meta.db_table, self.name, value)
         if connection is None:
-            connection = db_connection
+            return BigIntegerField.get_db_prep_lookup(self, lookup_type=lookup_type, value=value)
         return BigIntegerField.get_db_prep_lookup(self, lookup_type=lookup_type, value=value,
                                                         connection=connection, prepared=prepared)
 
