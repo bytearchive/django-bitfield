@@ -208,6 +208,22 @@ class BitHandler(object):
     def items(self):
         return list(self.iteritems())
 
+    def values(self):
+        for k in self._keys:
+            yield getattr(self, k).is_set
+
+    def get_set_flags(self):
+        return [k for  k in self._keys if getattr(self, k).is_set]
+
+    def get_unset_flags(self):
+        return [k for  k in self._keys if not getattr(self, k).is_set]
+
+    def get_set_bits(self):
+        return [k+1 for k in range(len(self._keys)) if self._value & 2**int(k) != 0]
+
+    def get_unset_bits(self):
+        return [k+1 for k in range(len(self._keys)) if self._value & 2**int(k) == 0]
+
     def iteritems(self):
         for k in self._keys:
             yield (k, getattr(self, k).is_set)
