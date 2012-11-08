@@ -7,7 +7,7 @@ class BigIntegerField(IntegerField):
     empty_strings_allowed = False
     description = _("Big (8 byte) integer")
     MAX_BIGINT = 9223372036854775807
-    
+
     def db_type(self):
         if settings.DATABASE_ENGINE == 'mysql':
             return "bigint"
@@ -19,7 +19,7 @@ class BigIntegerField(IntegerField):
             return "bigint"
         else:
             raise NotImplemented
-    
+
     def to_python(self, value):
         if value is None:
             return value
@@ -28,7 +28,7 @@ class BigIntegerField(IntegerField):
         except (TypeError, ValueError):
             raise exceptions.ValidationError(
                 _("This value must be a long integer."))
-    
+
     def get_internal_type(self):
         return "BigIntegerField"
 
@@ -37,7 +37,7 @@ class BigIntegerField(IntegerField):
                     'max_value': BigIntegerField.MAX_BIGINT}
         defaults.update(kwargs)
         return super(BigIntegerField, self).formfield(**defaults)
-    
+
     def contribute_to_class(self, cls, name):
         self.model = cls
         super(BigIntegerField, self).contribute_to_class(cls, name)
@@ -74,3 +74,9 @@ def make_contrib(superclass, func=None):
         setattr(cls, self.name, Creator(self))
 
     return contribute_to_class
+
+try:
+    from south.modelsinspector import add_introspection_rules
+    add_introspection_rules([], ["^bitfield\.fields\.BigIntegerField"])
+except ImportError:
+    pass
