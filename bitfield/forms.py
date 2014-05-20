@@ -9,7 +9,7 @@ class BitFieldCheckboxSelectMultiple(CheckboxSelectMultiple):
         if value is not None:
             value = [k for k, v in value if v]
         return super(BitFieldCheckboxSelectMultiple, self).render(
-          name, value, attrs=attrs, choices=choices)
+            name, value, attrs=attrs, choices=choices)
 
     def _has_changed(self, initial, data):
         if initial is None:
@@ -32,6 +32,7 @@ class BitFormField(IntegerField):
         kwargs['widget'] = widget
         super(BitFormField, self).__init__(*args, **kwargs)
         self.widget.choices = [(i, i) for i in choices]
+        choices = [i.encode('utf8') for i in choices]
         self.choices = choices
 
     def clean(self, value):
@@ -40,5 +41,5 @@ class BitFormField(IntegerField):
 
         result = BitHandler(0, self.choices)
         for k in value:
-            setattr(result, k, True)
+            setattr(result, k.encode('utf8'), True)
         return int(result)
